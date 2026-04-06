@@ -13,15 +13,10 @@ import io
 # -----------------------
 st.set_page_config(page_title="Churn Dashboard", layout="wide")
 
-# Load model
+# -----------------------
+# LOAD MODEL
+# -----------------------
 model = joblib.load("churn_model.pkl")
-
-# SHAP Explainer (cached for speed)
-@st.cache_resource
-def load_explainer():
-    return shap.Explainer(model.named_steps['classifier'])
-
-explainer = load_explainer()
 
 # -----------------------
 # HEADER
@@ -30,7 +25,7 @@ st.markdown("<h1 style='text-align: center;'>📊 Telecom Churn Prediction Dashb
 st.markdown("---")
 
 # -----------------------
-# SIDEBAR INPUTS (same as yours)
+# SIDEBAR INPUTS
 # -----------------------
 st.sidebar.header("🧾 Customer Inputs")
 
@@ -160,34 +155,45 @@ if st.button("Predict Churn"):
         st.success("✅ Customer likely to stay")
 
     # -----------------------
-    # 🔥 SHAP EXPLANATION
+    # SHAP EXPLANATION (FIXED)
     # -----------------------
     st.markdown("## 🧠 Why this prediction?")
 
-    shap_values = explainer(input_data)
+    # Transform input
+    X_transformed = model.named_steps['preprocessor'].transform(input_data)
 
-    fig, ax = plt.subplots()
-    shap.plots.waterfall(shap_values[0], show=False)
-    st.pyplot(fig, use_container_width=True)
+    # Get feature names
+    feature_names = model.named_steps['preprocessor'].get_feature_names_out()
 
-    # -----------------------
-    # 🧠 TOP REASONS TEXT
-    # -----------------------
-    st.markdown("## 📌 Top Reasons")
+    # SHAP
+    explainer = shap.Explainer(model.named_steps['classifier'])
+    shap_values = explainer(X_transformed)
 
     shap_df = pd.DataFrame({
-        "feature": input_data.columns,
+        "feature": feature_names,
         "impact": shap_values.values[0]
     })
 
     shap_df["abs_impact"] = shap_df["impact"].abs()
-    top_features = shap_df.sort_values("abs_impact", ascending=False).head(5)
+    top_shap = shap_df.sort_values("abs_impact", ascending=False).head(10)
 
-    for _, row in top_features.iterrows():
+    # Plot
+    fig, ax = plt.subplots()
+    ax.barh(top_shap["feature"], top_shap["impact"])
+    ax.invert_yaxis()
+    ax.set_title("Top Factors Affecting This Prediction")
+    st.pyplot(fig, use_container_width=True)
+
+    # -----------------------
+    # TOP REASONS TEXT
+    # -----------------------
+    st.markdown("## 📌 Top Reasons")
+
+    for _, row in top_shap.iterrows():
         if row["impact"] > 0:
-            st.write(f"🔴 {row['feature']} is increasing churn risk")
+            st.write(f"🔴 {row['feature']} increases churn risk")
         else:
-            st.write(f"🔵 {row['feature']} is reducing churn risk")
+            st.write(f"🔵 {row['feature']} decreases churn risk")
 
     # -----------------------
     # PDF DOWNLOAD
