@@ -155,24 +155,27 @@ if st.button("Predict Churn"):
         st.success("✅ Customer likely to stay")
 
     # -----------------------
-    # SHAP EXPLANATION (FIXED)
+    # SHAP EXPLANATION
     # -----------------------
     st.markdown("## 🧠 Why this prediction?")
 
-    # Transform input
     X_transformed = model.named_steps['preprocessor'].transform(input_data)
-
-    # Get feature names
     feature_names = model.named_steps['preprocessor'].get_feature_names_out()
 
-    # SHAP
     explainer = shap.Explainer(model.named_steps['classifier'])
     shap_values = explainer(X_transformed)
 
+    # ✅ FIXED FOR CLASSIFICATION
+    shap_impact = shap_values.values[0, :, 1]
+
     shap_df = pd.DataFrame({
         "feature": feature_names,
-        "impact": shap_values.values[0]
+        "impact": shap_impact
     })
+
+    # Clean feature names (remove prefixes)
+    shap_df["feature"] = shap_df["feature"].str.replace("num__", "")
+    shap_df["feature"] = shap_df["feature"].str.replace("cat__", "")
 
     shap_df["abs_impact"] = shap_df["impact"].abs()
     top_shap = shap_df.sort_values("abs_impact", ascending=False).head(10)
@@ -194,6 +197,16 @@ if st.button("Predict Churn"):
             st.write(f"🔴 {row['feature']} increases churn risk")
         else:
             st.write(f"🔵 {row['feature']} decreases churn risk")
+
+    # -----------------------
+    # SMART SUMMARY
+    # -----------------------
+    st.markdown("## 🧠 Summary")
+
+    if prediction == 1:
+        st.warning("Customer is likely to churn mainly due to the above risk factors.")
+    else:
+        st.success("Customer is likely to stay due to strong engagement and positive indicators.")
 
     # -----------------------
     # PDF DOWNLOAD
