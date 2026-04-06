@@ -1,6 +1,11 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import matplotlib.pyplot as plt
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
+import io
 
 # -----------------------
 # PAGE CONFIG
@@ -129,14 +134,11 @@ if st.button("Predict Churn"):
     prediction = model.predict(input_data)[0]
     probability = model.predict_proba(input_data)[0][1]
 
-    # Layout columns
     col1, col2, col3 = st.columns(3)
 
-    # KPI Cards
     col1.metric("Prediction", "Churn" if prediction==1 else "No Churn")
     col2.metric("Probability", f"{probability:.2%}")
 
-    # Risk Level
     if probability < 0.3:
         risk = "🟢 Low"
     elif probability < 0.7:
@@ -148,12 +150,62 @@ if st.button("Predict Churn"):
 
     st.markdown("---")
 
-    # Progress Bar
     st.subheader("📊 Churn Probability")
     st.progress(float(probability))
 
-    # Message
     if prediction == 1:
         st.error("⚠️ Customer likely to churn")
     else:
         st.success("✅ Customer likely to stay")
+
+    # -----------------------
+    # FEATURE IMPORTANCE
+    # -----------------------
+    st.markdown("## 📊 Feature Importance")
+
+    clf = model.named_steps['classifier']
+    importances = clf.feature_importances_
+
+    feature_names = input_data.columns
+
+    feat_imp = pd.DataFrame({
+        "feature": feature_names,
+        "importance": importances[:len(feature_names)]
+    }).sort_values(by="importance", ascending=False).head(10)
+
+    fig, ax = plt.subplots()
+    bars = ax.barh(feat_imp["feature"], feat_imp["importance"])
+    ax.invert_yaxis()
+    ax.set_title("Top Features")
+
+    for bar in bars:
+        width = bar.get_width()
+        ax.text(width, bar.get_y() + bar.get_height()/2,
+                f"{width:.3f}", va='center')
+
+    st.pyplot(fig, use_container_width=True)
+
+    # -----------------------
+    # PDF DOWNLOAD
+    # -----------------------
+    st.markdown("## 📄 Download Report")
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+
+    content = []
+    content.append(Paragraph("Telecom Churn Prediction Report", styles["Title"]))
+    content.append(Paragraph(f"Prediction: {'Churn' if prediction==1 else 'No Churn'}", styles["Normal"]))
+    content.append(Paragraph(f"Probability: {probability:.2%}", styles["Normal"]))
+    content.append(Paragraph(f"Risk Level: {risk}", styles["Normal"]))
+
+    doc.build(content)
+    buffer.seek(0)
+
+    st.download_button(
+        label="Download PDF Report",
+        data=buffer,
+        file_name="churn_report.pdf",
+        mime="application/pdf"
+    )
