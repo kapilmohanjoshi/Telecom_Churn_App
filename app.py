@@ -25,11 +25,7 @@ st.markdown("<h1 style='text-align: center;'>📊 Telecom Churn Prediction Dashb
 st.markdown("---")
 
 st.markdown(
-    """
-    <div style='position:fixed; bottom:10px; right:20px; color:#008080; font-size:13px;'>
-    ✨ Created by Kapil
-    </div>
-    """,
+    "<p style='text-align:right; color:#008080; font-size:13px;'>Created by Kapil</p>",
     unsafe_allow_html=True
 )
 # -----------------------
