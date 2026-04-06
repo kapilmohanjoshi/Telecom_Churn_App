@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import shap
 import matplotlib.pyplot as plt
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph
@@ -15,15 +16,21 @@ st.set_page_config(page_title="Churn Dashboard", layout="wide")
 # Load model
 model = joblib.load("churn_model.pkl")
 
+# SHAP Explainer (cached for speed)
+@st.cache_resource
+def load_explainer():
+    return shap.Explainer(model.named_steps['classifier'])
+
+explainer = load_explainer()
+
 # -----------------------
 # HEADER
 # -----------------------
 st.markdown("<h1 style='text-align: center;'>📊 Telecom Churn Prediction Dashboard</h1>", unsafe_allow_html=True)
-
 st.markdown("---")
 
 # -----------------------
-# SIDEBAR INPUTS
+# SIDEBAR INPUTS (same as yours)
 # -----------------------
 st.sidebar.header("🧾 Customer Inputs")
 
@@ -84,7 +91,7 @@ retention_offer_accepted_flag = st.sidebar.selectbox("Retention Accepted", [0,1]
 avg_revenue_per_month = total_charges / (tenure_months + 1)
 
 # -----------------------
-# CREATE INPUT DATA
+# INPUT DATA
 # -----------------------
 input_data = pd.DataFrame([{
     'gender': gender,
@@ -125,7 +132,7 @@ input_data = pd.DataFrame([{
 }])
 
 # -----------------------
-# PREDICTION BUTTON
+# PREDICTION
 # -----------------------
 st.markdown("### 🔍 Prediction")
 
@@ -139,13 +146,7 @@ if st.button("Predict Churn"):
     col1.metric("Prediction", "Churn" if prediction==1 else "No Churn")
     col2.metric("Probability", f"{probability:.2%}")
 
-    if probability < 0.3:
-        risk = "🟢 Low"
-    elif probability < 0.7:
-        risk = "🟡 Medium"
-    else:
-        risk = "🔴 High"
-
+    risk = "🟢 Low" if probability < 0.3 else "🟡 Medium" if probability < 0.7 else "🔴 High"
     col3.metric("Risk Level", risk)
 
     st.markdown("---")
@@ -159,31 +160,34 @@ if st.button("Predict Churn"):
         st.success("✅ Customer likely to stay")
 
     # -----------------------
-    # FEATURE IMPORTANCE
+    # 🔥 SHAP EXPLANATION
     # -----------------------
-    st.markdown("## 📊 Feature Importance")
+    st.markdown("## 🧠 Why this prediction?")
 
-    clf = model.named_steps['classifier']
-    importances = clf.feature_importances_
-
-    feature_names = input_data.columns
-
-    feat_imp = pd.DataFrame({
-        "feature": feature_names,
-        "importance": importances[:len(feature_names)]
-    }).sort_values(by="importance", ascending=False).head(10)
+    shap_values = explainer(input_data)
 
     fig, ax = plt.subplots()
-    bars = ax.barh(feat_imp["feature"], feat_imp["importance"])
-    ax.invert_yaxis()
-    ax.set_title("Top Features")
-
-    for bar in bars:
-        width = bar.get_width()
-        ax.text(width, bar.get_y() + bar.get_height()/2,
-                f"{width:.3f}", va='center')
-
+    shap.plots.waterfall(shap_values[0], show=False)
     st.pyplot(fig, use_container_width=True)
+
+    # -----------------------
+    # 🧠 TOP REASONS TEXT
+    # -----------------------
+    st.markdown("## 📌 Top Reasons")
+
+    shap_df = pd.DataFrame({
+        "feature": input_data.columns,
+        "impact": shap_values.values[0]
+    })
+
+    shap_df["abs_impact"] = shap_df["impact"].abs()
+    top_features = shap_df.sort_values("abs_impact", ascending=False).head(5)
+
+    for _, row in top_features.iterrows():
+        if row["impact"] > 0:
+            st.write(f"🔴 {row['feature']} is increasing churn risk")
+        else:
+            st.write(f"🔵 {row['feature']} is reducing churn risk")
 
     # -----------------------
     # PDF DOWNLOAD
