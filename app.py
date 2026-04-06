@@ -24,6 +24,14 @@ model = joblib.load("churn_model.pkl")
 st.markdown("<h1 style='text-align: center;'>📊 Telecom Churn Prediction Dashboard</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
+st.markdown(
+    """
+    <div style='position:fixed; bottom:10px; right:20px; color:#008080; font-size:13px;'>
+    ✨ Created by Kapil
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 # -----------------------
 # SIDEBAR INPUTS
 # -----------------------
